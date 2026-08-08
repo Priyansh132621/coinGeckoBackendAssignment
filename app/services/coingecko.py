@@ -115,7 +115,10 @@ async def coin_market_data(
     if category:
         params["category"] = category
 
-    cache_key = f"market_data:coin={coin_id}:category={category}:page={page_num}:per_page={per_page}"
+    cache_key = (
+        f"market_data:coin={coin_id}:category={category}:"
+        f"page={page_num}:per_page={per_page}"
+    )
     cached = cache.get(cache_key)
     if cached is not None:
         logger.info("Market data served from cache")
