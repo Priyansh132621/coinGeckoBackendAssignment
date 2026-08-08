@@ -1,13 +1,18 @@
 from fastapi import FastAPI
 
-app = FastAPI()
+from app.routers.crypto import router as crypto_router
+app = FastAPI(
+    title="Crypto API",
+    version="1.0.0",
+)
+
+app.include_router(
+    crypto_router,
+    prefix="/crypto",
+)
 
 
 @app.get("/")
 def read_root():
-    return {"Hello": "World"}
+    return {"message": "Server is up and running"}
 
-
-@app.get("/items/{item_id}")
-def read_item(item_id: int, q: str | None = None):
-    return {"item_id": item_id, "q": q}
