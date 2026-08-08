@@ -1,7 +1,7 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import JSONResponse
 
-from app.config import APP_VERSION
+from app.config import API_AUTH_KEY, APP_VERSION
 from app.services.coingecko import (
     categories_list,
     check_health,
@@ -10,6 +10,14 @@ from app.services.coingecko import (
 )
 from pydantic import BaseModel
 router = APIRouter()
+
+
+def verify_api_key(api_key: str | None = Header(default=None, alias="x-api-key")):
+    if not API_AUTH_KEY:
+        raise HTTPException(status_code=500, detail="API_AUTH_KEY is not configured")
+
+    if api_key != API_AUTH_KEY:
+        raise HTTPException(status_code=401,detail="Invalid or missing API key in header")
 
 class Coin(BaseModel):
     id: str
@@ -82,7 +90,8 @@ async def health_check():
     )
 
 @router.get("/coins", response_model=CoinsResponse)
-async def list_coins(page_num: int = Query(default=1),per_page: int = Query(default=10)):
+async def list_coins(page_num: int = Query(default=1),per_page: int = Query(default=10),
+                     _: None = Depends(verify_api_key)):
     try:
         coins = await coins_list(page_num=page_num, per_page=per_page)
         coin_list = []
@@ -120,7 +129,8 @@ async def list_coins(page_num: int = Query(default=1),per_page: int = Query(defa
 
 
 @router.get("/categories", response_model=CategoriesResponse)
-async def list_categories(page_num: int = Query(default=1),per_page: int = Query(default=10)):
+async def list_categories(page_num: int = Query(default=1),per_page: int = Query(default=10),
+                          _: None = Depends(verify_api_key)):
     try:
         categories = await categories_list(page_num=page_num, per_page=per_page)
         category_list = []
@@ -157,11 +167,14 @@ async def list_categories(page_num: int = Query(default=1),per_page: int = Query
 
 
 @router.get("/market-data", response_model=MarketDataResponse)
-async def get_market_data(coin_id: str | None = None,category: str | None = None,page_num: int = Query(default=1),per_page: int = Query(default=10)):
+async def get_market_data(coin_id: str | None = None,category: str | None = None,
+                          page_num: int = Query(default=1), per_page: int = Query(default=10),
+                          _: None = Depends(verify_api_key)):
+
     if not coin_id and not category:
         raise HTTPException(
             status_code=400,
-            message="At least one of coin_id or category must be provided",
+            detail="At least one of coin_id or category must be provided",
         )
 
     try:
