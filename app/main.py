@@ -1,6 +1,11 @@
 from fastapi import FastAPI
 
+from app.config import LOG_LEVEL
+from app.logger import setup_logging
 from app.routers.crypto import router as crypto_router
+
+setup_logging(LOG_LEVEL)
+
 app = FastAPI(
     title="Crypto API",
     version="1.0.0",

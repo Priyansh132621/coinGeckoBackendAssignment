@@ -1,6 +1,23 @@
 import httpx
 import re
-from app.config import COIN_GECKO_API_KEY, COIN_GECKO_BASE_URL
+from app.config import COIN_GECKO_API_KEY, COIN_GECKO_BASE_URL, WEBHOOK_URL
+from app.logger import get_logger
+
+logger = get_logger(__name__)
+
+
+async def send_market_data_webhook(payload: dict) -> None:
+    if not WEBHOOK_URL:
+        logger.debug("Webhook URL not configured, skipping webhook")
+        return
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.post(WEBHOOK_URL, json=payload)
+            response.raise_for_status()
+        logger.info("Webhook sent successfully")
+    except (httpx.RequestError, httpx.HTTPStatusError):
+        logger.exception("Webhook send failed")
+        return
 
 
 async def check_health() -> dict:
@@ -24,6 +41,7 @@ async def check_health() -> dict:
         return {"status": "unreachable","coin_gecko_version": ""}
 
     except httpx.RequestError:
+        logger.exception("Health check request to CoinGecko failed")
         return {"status": "unreachable","coin_gecko_version": ""}
 
 async def coins_list(page_num: int = 1, per_page: int = 10) -> list[dict]:
@@ -44,6 +62,7 @@ async def coins_list(page_num: int = 1, per_page: int = 10) -> list[dict]:
         return coins[start_index:end_index]
 
     except (httpx.RequestError, httpx.HTTPStatusError):
+        logger.exception("Coins list fetch failed")
         return []
 
 
@@ -68,6 +87,7 @@ async def categories_list(page_num: int = 1, per_page: int = 10) -> list[dict]:
         return categories[start_index:end_index]
 
     except (httpx.RequestError, httpx.HTTPStatusError):
+        logger.exception("Categories list fetch failed")
         return []
 
 
@@ -103,7 +123,23 @@ async def coin_market_data(
             )
 
         response.raise_for_status()
-        return response.json()
+        market_data = response.json()
+        logger.info("Market data fetched successfully. Records: %s", len(market_data))
+
+        await send_market_data_webhook(
+            {
+                "event": "market_data_fetched",
+                "served_from_cache": False,
+                "coin_id": coin_id,
+                "category": category,
+                "page_num": page_num,
+                "per_page": per_page,
+                "result_count": len(market_data),
+            }
+        )
+
+        return market_data
 
     except (httpx.RequestError, httpx.HTTPStatusError):
+        logger.exception("Market data fetch failed")
         return []
