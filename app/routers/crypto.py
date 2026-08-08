@@ -1,8 +1,13 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 
 from app.config import APP_VERSION
-from app.services.coingecko import check_health, coins_list
+from app.services.coingecko import (
+    categories_list,
+    check_health,
+    coin_market_data,
+    coins_list,
+)
 from pydantic import BaseModel
 router = APIRouter()
 
@@ -10,6 +15,21 @@ class Coin(BaseModel):
     id: str
     symbol: str
     name: str
+
+
+class Category(BaseModel):
+    category_id: str
+    name: str
+
+
+class MarketCoin(BaseModel):
+    id: str
+    symbol: str
+    name: str
+    current_price: float | None = None
+    market_cap: float | None = None
+    market_cap_rank: int | None = None
+    total_volume: float | None = None
 
 
 class CoinGeckoHealth(BaseModel):
@@ -26,6 +46,16 @@ class HealthResponse(BaseModel):
 class CoinsResponse(BaseModel):
     status: str
     coins: list[Coin]
+
+
+class CategoriesResponse(BaseModel):
+    status: str
+    categories: list[Category]
+
+
+class MarketDataResponse(BaseModel):
+    status: str
+    market_data: list[MarketCoin]
 
 @router.get("/health", response_model=HealthResponse)
 async def health_check():
@@ -85,5 +115,99 @@ async def list_coins(page_num: int = Query(default=1),per_page: int = Query(defa
             content={
                 "status": "unavailable",
                 "coins": [],
+            },
+        )
+
+
+@router.get("/categories", response_model=CategoriesResponse)
+async def list_categories(page_num: int = Query(default=1),per_page: int = Query(default=10)):
+    try:
+        categories = await categories_list(page_num=page_num, per_page=per_page)
+        category_list = []
+
+        for category in categories:
+            category_item = Category(
+                category_id=category["category_id"],
+                name=category["name"],
+            )
+            category_list.append(category_item)
+
+        status_code = 200
+        category_status = "available"
+
+        if len(category_list) == 0:
+            status_code = 503
+            category_status = "unavailable"
+
+        response = {
+            "status": category_status,
+            "categories": [category.model_dump() for category in category_list],
+        }
+
+        return JSONResponse(status_code=status_code, content=response)
+
+    except Exception:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "unavailable",
+                "categories": [],
+            },
+        )
+
+
+@router.get("/market-data", response_model=MarketDataResponse)
+async def get_market_data(coin_id: str | None = None,category: str | None = None,page_num: int = Query(default=1),per_page: int = Query(default=10)):
+    if not coin_id and not category:
+        raise HTTPException(
+            status_code=400,
+            message="At least one of coin_id or category must be provided",
+        )
+
+    try:
+        market_data = await coin_market_data(
+            coin_id=coin_id,
+            category=category,
+            page_num=page_num,
+            per_page=per_page,
+        )
+        market_coin_list = []
+
+        for coin in market_data:
+            market_coin_item = MarketCoin(
+                id=coin["id"],
+                symbol=coin["symbol"],
+                name=coin["name"],
+                current_price=coin.get("current_price"),
+                market_cap=coin.get("market_cap"),
+                market_cap_rank=coin.get("market_cap_rank"),
+                total_volume=coin.get("total_volume"),
+            )
+            market_coin_list.append(market_coin_item)
+
+        status_code = 200
+        market_status = "available"
+
+        if len(market_coin_list) == 0:
+            status_code = 503
+            market_status = "unavailable"
+
+        market_data_list = []
+        for coin in market_coin_list:
+            market_data_list.append(coin.model_dump())
+
+        response = {
+            "status": market_status,
+            "market_data": market_data_list,
+        }
+
+        return JSONResponse(status_code=status_code, content=response)
+
+    except Exception:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "unavailable",
+                "market_data": [],
             },
         )

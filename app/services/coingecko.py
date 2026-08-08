@@ -45,3 +45,65 @@ async def coins_list(page_num: int = 1, per_page: int = 10) -> list[dict]:
 
     except (httpx.RequestError, httpx.HTTPStatusError):
         return []
+
+
+async def categories_list(page_num: int = 1, per_page: int = 10) -> list[dict]:
+    headers = {}
+
+    if COIN_GECKO_API_KEY:
+        headers["x-cg-demo-api-key"] = COIN_GECKO_API_KEY
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(
+                f"{COIN_GECKO_BASE_URL}/coins/categories/list",
+                headers=headers,
+            )
+
+        response.raise_for_status()
+        categories = response.json()
+
+        start_index = (page_num - 1) * per_page
+        end_index = start_index + per_page
+        return categories[start_index:end_index]
+
+    except (httpx.RequestError, httpx.HTTPStatusError):
+        return []
+
+
+async def coin_market_data(
+    coin_id: str | None = None,
+    category: str | None = None,
+    page_num: int = 1,
+    per_page: int = 10,
+) -> list[dict]:
+    headers = {}
+
+    if COIN_GECKO_API_KEY:
+        headers["x-cg-demo-api-key"] = COIN_GECKO_API_KEY
+
+    params = {
+        "vs_currency": "cad",
+        "page": page_num,
+        "per_page": per_page,
+    }
+
+    if coin_id:
+        params["ids"] = coin_id
+
+    if category:
+        params["category"] = category
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(
+                f"{COIN_GECKO_BASE_URL}/coins/markets",
+                headers=headers,
+                params=params,
+            )
+
+        response.raise_for_status()
+        return response.json()
+
+    except (httpx.RequestError, httpx.HTTPStatusError):
+        return []
