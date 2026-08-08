@@ -1,5 +1,6 @@
 import httpx
 import re
+from app import cache
 from app.config import COIN_GECKO_API_KEY, COIN_GECKO_BASE_URL, WEBHOOK_URL
 from app.logger import get_logger
 
@@ -114,6 +115,12 @@ async def coin_market_data(
     if category:
         params["category"] = category
 
+    cache_key = f"market_data:coin={coin_id}:category={category}:page={page_num}:per_page={per_page}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        logger.info("Market data served from cache")
+        return cached
+
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.get(
@@ -124,12 +131,13 @@ async def coin_market_data(
 
         response.raise_for_status()
         market_data = response.json()
-        logger.info("Market data fetched successfully. Records: %s", len(market_data))
+        logger.info("Market data fetched from CoinGecko. Records: %s", len(market_data))
+
+        cache.set(cache_key, market_data)
 
         await send_market_data_webhook(
             {
                 "event": "market_data_fetched",
-                "served_from_cache": False,
                 "coin_id": coin_id,
                 "category": category,
                 "page_num": page_num,
