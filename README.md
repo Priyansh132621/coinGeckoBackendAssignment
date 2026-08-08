@@ -23,6 +23,8 @@ If you are new, follow the Quick Start section first.
 5. Run the server.
 6. Open Swagger docs and test endpoints.
 
+### Clone this Repo after cloning follow the following steps - 
+
 ### Step 1: Create virtual environment
 
 Windows PowerShell:
